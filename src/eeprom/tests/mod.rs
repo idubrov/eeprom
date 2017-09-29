@@ -5,6 +5,18 @@ use std::vec::Vec;
 
 mod memdump;
 
+// Fake linker variables
+#[export_name = "_eeprom_start"] pub static EEPROM_START: u32 = 0;
+#[export_name = "_page_size"] pub static PAGE_SIZE: u32 = 0;
+#[export_name = "_eeprom_pages"] pub static EEPROM_PAGES: u32 = 0;
+
+#[test]
+pub fn used() {
+    assert_eq!(0, EEPROM_START);
+    assert_eq!(0, PAGE_SIZE);
+    assert_eq!(0, EEPROM_PAGES);
+}
+
 const REG_SIZE: usize = size_of::<FLASH>();
 
 struct FakeMCU {

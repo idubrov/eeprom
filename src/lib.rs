@@ -3,7 +3,7 @@
 #![feature(const_fn)]
 #![feature(const_size_of)]
 #![warn(missing_docs)]
-//#![deny(warnings)]
+#![deny(warnings)]
 
 pub mod eeprom;
 
