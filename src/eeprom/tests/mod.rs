@@ -117,9 +117,6 @@ fn test_read_full_simple() {
     assert_eq!(0xdead, eeprom.read(1).unwrap()); // last item on the page
     assert_eq!(0xbeef, eeprom.read(2).unwrap());
     assert_eq!(true, eeprom.read(3).is_none());
-
-    // should not read item on the page -- page status
-    assert_eq!(true, eeprom.read(0xabcd).is_none());
 }
 
 // read() tests

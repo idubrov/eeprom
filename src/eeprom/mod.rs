@@ -142,7 +142,10 @@ impl EEPROM {
     ///
     /// # Panics
     /// * panics if active page cannot be found
+    /// * panics if tag value has the most significant bit set to `1` (reserved value)
     pub fn read(&self, tag: HalfWord) -> Option<HalfWord> {
+        assert!(tag & 0b1000_0000_0000_0000 == 0);
+
         let page = self.find_active().expect("cannot find active page");
         self.search(page, self.page_items, tag)
     }
@@ -152,7 +155,10 @@ impl EEPROM {
     /// # Panics
     /// * panics if active page cannot be found
     /// * panics if page is full even after compacting it to the empty one
+    /// * panics if tag value has the most significant bit set to `1` (reserved value)
     pub fn write(&self, flash: &FLASH, tag: HalfWord, data: HalfWord) -> FlashResult {
+        assert!(tag & 0b1000_0000_0000_0000 == 0);
+
         let page = self.find_active().expect("cannot find active page");
 
         // rescue all the data to the free page first
