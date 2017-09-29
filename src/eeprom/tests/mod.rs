@@ -43,17 +43,30 @@ impl FakeMCU {
     }
 }
 
-fn test_init(initial: &str, expected: &str) {
+fn test(initial: &str, expected: &str, cb: fn (&eeprom::EEPROM, &FLASH)) {
     let mut mcu = FakeMCU::load(initial, 1024, 2);
     let eeprom = mcu.eeprom();
 
-    eeprom.init(mcu.flash_reg()).unwrap();
-    let expecte_file = memdump::read_file(expected);
-    let expected: Vec<&str> = expecte_file.lines().collect();
+    cb(&eeprom, mcu.flash_reg());
+
+    let expected_file = memdump::read_file(expected);
+    let expected: Vec<&str> = expected_file.lines().collect();
     let actual_dump = memdump::dump(&mcu.flash_mem, mcu.page_size);
     let actual_lines: Vec<&str> = actual_dump.lines().collect();
     assert_eq!(expected, actual_lines);
 }
+
+fn test_init(initial: &str, expected: &str) {
+    test(initial, expected, |eeprom, flash|
+        eeprom.init(flash).unwrap())
+}
+
+fn test_erase(initial: &str, expected: &str) {
+    test(initial, expected, |eeprom, flash|
+        eeprom.erase(flash).unwrap())
+}
+
+// init() tests
 
 #[test]
 fn test_init_erased() { test_init("dumps/erased.txt", "dumps/empty.txt") }
@@ -76,3 +89,17 @@ fn test_init_valid_simple() { test_init("dumps/valid-simple.txt", "dumps/valid-s
 // Note that order is reversed when rescued (since we scan from the end)
 #[test]
 fn test_init_rescue_full_simple() { test_init("dumps/full-simple.txt", "dumps/valid-simple.txt") }
+
+// erase() tests
+
+#[test]
+fn test_erase_empty() { test_erase("dumps/empty.txt", "dumps/empty.txt") }
+
+#[test]
+fn test_erase_empty_page2() { test_erase("dumps/empty-page2.txt", "dumps/empty.txt") }
+
+#[test]
+fn test_erase_simple() { test_erase("dumps/valid-simple.txt", "dumps/empty.txt") }
+
+#[test]
+fn test_erase_full_simple() { test_erase("dumps/full-simple.txt", "dumps/empty.txt") }
