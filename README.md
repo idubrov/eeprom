@@ -5,7 +5,49 @@
 
 # stm32-flash
 
-Library for in-application programming of the Flash area on the STM32 series microcontrollers.
+Library for in-application programming of the Flash memory on the STM32 series microcontrollers.
+
+## Examples
+
+Erasing flash memory page and writing some data to it:
+
+```rust
+extern crate stm32f103xx;
+extern crate stm32_flash;
+// Get flash somehow...
+// let flash = FLASH.borrow(cs);
+let flash = stm32_flash::unlock(flash).unwrap(); // Unlock Flash for writing
+unsafe {
+    stm32_flash::erase_page(&flash, 0x800_fc00).unwrap(); // last 1K page on a chip with 64K flash memory
+    stm32_flash::program_half_word(&flash, 0x800_fc00, 0xcafe).unwrap();
+    stm32_flash::program_half_word(&flash, 0x800_fc02, 0xbabe).unwrap();
+}
+```
+
+Additionally, this library includes support for EEPROM emulation. See the `eeprom` module
+documentation for more details.
+
+Simple example of writing and reading data from EEPROM backed by Flash memory:
+
+## Examples
+Write variables to the EEPROM:
+
+```rust
+extern crate stm32f103xx;
+extern crate stm32_flash;
+
+use stm32_flash::eeprom;
+let eeprom = eeprom::default();
+// Get flash somehow...
+// let flash = FLASH.borrow(cs);
+eeprom.init(&flash).expect("failed to init EEPROM");
+eeprom.write(&flash, 1, 0xdead).expect("failed to write data to EEPROM");
+eeprom.write(&flash, 2, 0xbeef).expect("failed to write data to EEPROM");
+assert_eq!(0xdead, eeprom.read(1).unwrap());
+assert_eq!(0xbeef, eeprom.read(2).unwrap());
+assert_eq!(true, eeprom.read(3).is_none());
+```
+
 
 ## License
 

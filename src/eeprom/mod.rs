@@ -38,6 +38,7 @@ use stm32f103xx::FLASH;
 use core::option::Option;
 use core::ptr;
 use core::mem::size_of;
+use core::result::Result;
 
 type HalfWord = u16; // STM32 allows programming half-words
 type Word = u32;
@@ -233,7 +234,7 @@ impl EEPROM {
     }
 
     fn set_page_status(&self, flash: &FLASH, page: usize, status: HalfWord) -> FlashResult {
-        unsafe { super::program_half_word(flash, self.page_address(page) as *mut HalfWord, status) }
+        unsafe { super::program_half_word(flash, self.page_address(page), status) }
     }
 
     fn page_address(&self, page: usize) -> usize {
@@ -267,7 +268,7 @@ impl EEPROM {
 
     #[cfg(not(test))]
     fn do_erase_page(&self, flash: &FLASH, page: usize) -> FlashResult {
-        unsafe { super::erase_page(flash, self.page_address(page) as *mut HalfWord) }
+        unsafe { super::erase_page(flash, self.page_address(page)) }
     }
 
     // Fake variant used in tests -- simply writes 0xff in the whole page
@@ -294,8 +295,8 @@ impl EEPROM {
         unsafe {
             // Not found -- write the value first, so if we fail for whatever reason,
             // we don't have the default value of `0xffff` for the item with `tag`.
-            super::program_half_word(flash, (item_addr + 2) as *mut HalfWord, data)?;
-            super::program_half_word(flash, item_addr as *mut HalfWord, tag)
+            super::program_half_word(flash, (item_addr + 2), data)?;
+            super::program_half_word(flash, item_addr, tag)
         }
     }
 }

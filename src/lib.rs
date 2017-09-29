@@ -1,4 +1,58 @@
-//! Library for in-application programming of the Flash area on the STM32 series microcontrollers.
+//! Library for in-application programming of the Flash memory on the STM32 series microcontrollers.
+//!
+//! # Examples
+//!
+//! Erasing flash memory page and writing some data to it:
+//!
+//! ```rust,no_run
+//! extern crate stm32f103xx;
+//! extern crate stm32_flash;
+//! # use stm32f103xx::FLASH;
+//! # pub fn main() {
+//! # let flash = unsafe { &*FLASH.get() };
+//! // Get flash somehow...
+//! // let flash = FLASH.borrow(cs);
+//! let flash = stm32_flash::unlock(flash).unwrap(); // Unlock Flash for writing
+//! unsafe {
+//!     stm32_flash::erase_page(&flash, 0x800_fc00).unwrap(); // last 1K page on a chip with 64K flash memory
+//!     stm32_flash::program_half_word(&flash, 0x800_fc00, 0xcafe).unwrap();
+//!     stm32_flash::program_half_word(&flash, 0x800_fc02, 0xbabe).unwrap();
+//! }
+//! # }
+//! ```
+//!
+//! Additionally, this library includes support for EEPROM emulation. See the `eeprom` module
+//! documentation for more details.
+//!
+//! Simple example of writing and reading data from EEPROM backed by Flash memory:
+//!
+//! # Examples
+//! Write variables to the EEPROM:
+//!
+//! ```rust,no_run
+//! extern crate stm32f103xx;
+//! extern crate stm32_flash;
+//!
+//! use stm32_flash::eeprom;
+//! # use stm32f103xx::FLASH;
+//! # // Fake linker variables
+//! # #[export_name = "_eeprom_start"] pub static EEPROM_START: u32 = 0;
+//! # #[export_name = "_page_size"] pub static PAGE_SIZE: u32 = 0;
+//! # #[export_name = "_eeprom_pages"] pub static EEPROM_PAGES: u32 = 0;
+//! # pub fn main() {
+//! # let flash = unsafe { &*FLASH.get() };
+//! let eeprom = eeprom::default();
+//! // Get flash somehow...
+//! // let flash = FLASH.borrow(cs);
+//! eeprom.init(&flash).expect("failed to init EEPROM");
+//! eeprom.write(&flash, 1, 0xdead).expect("failed to write data to EEPROM");
+//! eeprom.write(&flash, 2, 0xbeef).expect("failed to write data to EEPROM");
+//! assert_eq!(0xdead, eeprom.read(1).unwrap());
+//! assert_eq!(0xbeef, eeprom.read(2).unwrap());
+//! assert_eq!(true, eeprom.read(3).is_none());
+//! # }
+//! ```
+//!
 #![no_std]
 #![feature(const_fn)]
 #![feature(const_size_of)]
@@ -110,24 +164,25 @@ pub fn is_locked(flash: &FLASH) -> bool {
     flash.cr.read().lock().bit_is_set()
 }
 
-/// Program half-word (16-bit) value at a specified address. `ptr` must point to an aligned
-/// location in the Flash area.
-pub unsafe fn program_half_word(flash: &FLASH, ptr: *mut u16, data: u16) -> FlashResult {
+/// Program half-word (16-bit) value at a specified address. `address` must be an address of
+/// a location in the Flash memory aligned to two bytes.
+pub unsafe fn program_half_word(flash: &FLASH, address: usize, data: u16) -> FlashResult {
     status(flash)?;
 
     flash.cr.modify(|_, w| w.pg().set_bit());
-    core::ptr::write(ptr, data); // Program the half-word
+    core::ptr::write(address as *mut u16, data); // Program the half-word
     let res = wait_complete(flash, PROGRAM_TIMEOUT);
     flash.cr.modify(|_, w| w.pg().clear_bit());
     res
 }
 
-/// Erase specified flash page. `ptr` must point at a beginning of the Flash page.
-pub unsafe fn erase_page(flash: &FLASH, ptr: *mut u16) -> FlashResult {
+/// Erase specified flash page. `address` must be an address of a beginning of the page in
+/// Flash memory.
+pub unsafe fn erase_page(flash: &FLASH, address: usize) -> FlashResult {
     status(flash)?;
 
     flash.cr.modify(|_, w| w.per().set_bit());
-    flash.ar.write(|w| w.bits(ptr as u32));
+    flash.ar.write(|w| w.bits(address as u32));
     flash.cr.modify(|_, w| w.strt().set_bit()); // Erase page
     let res = wait_complete(flash, ERASE_TIMEOUT);
     flash.cr.modify(|_, w| w.per().clear_bit());
