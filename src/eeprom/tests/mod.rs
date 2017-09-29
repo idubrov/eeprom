@@ -90,6 +90,11 @@ fn test_init_valid_simple() { test_init("dumps/valid-simple.txt", "dumps/valid-s
 #[test]
 fn test_init_rescue_full_simple() { test_init("dumps/full-simple.txt", "dumps/valid-simple.txt") }
 
+// Duplicates are ignored
+#[test]
+fn test_init_rescue_full_simple_duplicated() { test_init("dumps/full-simple-duplicated-data.txt", "dumps/valid-simple.txt") }
+
+
 // erase() tests
 
 #[test]
