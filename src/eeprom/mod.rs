@@ -90,11 +90,11 @@ pub fn default() -> EEPROM {
 pub fn new(first_page_address: usize, page_size: usize, page_count: usize) -> EEPROM {
     debug_assert!(page_count >= 2,
                   "EEPROM page count must be greater or equal to 2! Check your linker script for `_eeprom_pages`");
-    debug_assert!((page_size & 0x3FF) == 0,
+    debug_assert_eq!(page_size & 0x3FF, 0,
                   "EEPROM page size should be a multiple of 1K! Check your linker script for `_page_size`");
     // Tests fake FLASH memory
     #[cfg(not(test))]
-    debug_assert!(((first_page_address - FLASH_START) % page_size) == 0,
+    debug_assert_eq!((first_page_address - FLASH_START) % page_size, 0,
                   "EEPROM first_page pointer does not point at the beginning of the FLASH page");
     EEPROM {
         first_page_address,
@@ -119,7 +119,7 @@ impl EEPROM {
             }
         }
 
-        if let None = active {
+        if active.is_none() {
             // Active page not found, mark the first page as active
             return self.set_page_status(&*flash, 0, ACTIVE_PAGE_MARKER);
         }
@@ -144,7 +144,7 @@ impl EEPROM {
     /// * panics if active page cannot be found
     /// * panics if tag value has the most significant bit set to `1` (reserved value)
     pub fn read(&self, tag: HalfWord) -> Option<HalfWord> {
-        assert!(tag & 0b1000_0000_0000_0000 == 0);
+        assert_eq!(tag & 0b1000_0000_0000_0000, 0, "msb bit of `1` is reserved");
 
         let page = self.find_active().expect("cannot find active page");
         self.search(page, self.page_items, tag)
@@ -157,7 +157,7 @@ impl EEPROM {
     /// * panics if page is full even after compacting it to the empty one
     /// * panics if tag value has the most significant bit set to `1` (reserved value)
     pub fn write(&self, flash: &FLASH, tag: HalfWord, data: HalfWord) -> FlashResult {
-        assert!(tag & 0b1000_0000_0000_0000 == 0);
+        assert_eq!(tag & 0b1000_0000_0000_0000, 0, "msb bit of `1` is reserved");
 
         let page = self.find_active().expect("cannot find active page");
 
@@ -194,7 +194,7 @@ impl EEPROM {
                 continue; // empty value -- skip
             }
 
-            if let None = self.search(tgt_page, tgt_pos, tag) {
+            if self.search(tgt_page, tgt_pos, tag).is_none() {
                 self.program_item(flash, tgt_page, tgt_pos, tag, data)?;
                 tgt_pos += 1;
             }
@@ -222,7 +222,7 @@ impl EEPROM {
                 return Some(page);
             }
         }
-        return None;
+        None
     }
 
     fn page_status(&self, page: usize) -> HalfWord {
@@ -283,7 +283,7 @@ impl EEPROM {
                 return true;
             }
         }
-        return false;
+        false
     }
 
     fn program_item(&self, flash: &FLASH, page: usize, pos: usize, tag: HalfWord, data: HalfWord) -> FlashResult {

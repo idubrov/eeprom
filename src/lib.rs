@@ -21,11 +21,11 @@ use core::result::Result;
 
 use stm32f103xx::FLASH;
 
-const FLASH_KEY1: u32 = 0x45670123;
-const FLASH_KEY2: u32 = 0xCDEF89AB;
+const FLASH_KEY1: u32 = 0x4567_0123;
+const FLASH_KEY2: u32 = 0xCDEF_89AB;
 
-const ERASE_TIMEOUT: u32 = 0x000B0000;
-const PROGRAM_TIMEOUT: u32 = 0x00002000;
+const ERASE_TIMEOUT: u32 = 0x000B_0000;
+const PROGRAM_TIMEOUT: u32 = 0x0000_2000;
 
 /// Flash operation error
 #[derive(Copy, Clone, Debug)]
@@ -79,7 +79,7 @@ impl<'a> Deref for UnlockGuard<'a> {
 ///
 /// # Note
 /// Panics if flash is locked already.
-pub fn unlock<'a>(flash: &'a FLASH) -> UnlockResult<'a> {
+pub fn unlock(flash: &FLASH) -> UnlockResult {
     let locked = is_locked(flash);
     if locked {
         unsafe {
