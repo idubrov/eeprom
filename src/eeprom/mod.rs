@@ -2,14 +2,34 @@
 //! Uses 2 or more Flash pages for storing 16-bit data.
 //!
 //! # Examples
-//! ```rust,noexec
-//! //use stm32_flash::eeprom;
-//! //let _eeprom = eeprom::default();
+//! ```rust,no_run
+//! extern crate stm32f103xx;
+//! extern crate stm32_flash;
+//! use stm32f103xx::FLASH;
+//! # // Fake linker variables
+//! # #[export_name = "_eeprom_start"] pub static EEPROM_START: u32 = 0;
+//! # #[export_name = "_page_size"] pub static PAGE_SIZE: u32 = 0;
+//! # #[export_name = "_eeprom_pages"] pub static EEPROM_PAGES: u32 = 0;
+//! # pub fn main() {
+//! # let flash = unsafe { &*FLASH.get() };
+//! use stm32_flash::eeprom;
+//! let eeprom = eeprom::default();
+//! // Get flash somehow...
+//! // let flash = FLASH.borrow(cs);
+//! eeprom.init(&flash).expect("failed to init EEPROM");
+//! eeprom.write(&flash, 1, 0xdead).expect("failed to write data to EEPROM");
+//! eeprom.write(&flash, 2, 0xbeef).expect("failed to write data to EEPROM");
+//! assert_eq!(0xdead, eeprom.read(1).unwrap());
+//! assert_eq!(0xbeef, eeprom.read(2).unwrap());
+//! assert_eq!(true, eeprom.read(3).is_none());
+//! # }
 //! ```
 //!
-//! # Warning
-//! EEPROM controller does not check if all possible variables fit on a single Flash page. If
-//! different variables do not fit into single Flash page, the behavior is undefined.
+//! # Panics
+//! EEPROM controller will panic in the following cases:
+//! * No free space on the page even after compaction
+//! * active page cannot be found during `read`/`write` operation (`init` makes sure that there
+//!   is exactly one active page.
 
 #[cfg(test)]
 mod tests;
@@ -21,8 +41,9 @@ use core::mem::size_of;
 
 type HalfWord = u16; // STM32 allows programming half-words
 type Word = u32;
+type FlashResult = super::FlashResult;
 
-const CURRENT_PAGE_MARKER: HalfWord = 0xABCD;
+const ACTIVE_PAGE_MARKER: HalfWord = 0xABCD;
 const ERASED_ITEM: Word = 0xffff_ffff; // two u16 half-words
 #[cfg(not(test))]
 const FLASH_START: usize = 0x800_0000;
@@ -30,7 +51,7 @@ const FLASH_START: usize = 0x800_0000;
 // Each item is 16-bit tag plus 16-bit value
 const ITEM_SIZE: usize = size_of::<Word>();
 
-// Default EEPROM (should be defined by the linker script, if used)
+// Default EEPROM (should be defined by the linker script, if feature is enabled)
 #[cfg(feature = "default-eeprom")]
 extern "C" {
     static _eeprom_start: u32;
@@ -85,49 +106,73 @@ pub fn new(first_page_address: usize, page_size: usize, page_count: usize) -> EE
 impl EEPROM {
     /// Initialize EEPROM controller. Checks that all internal data structures are in consistent
     /// state and fixes them otherwise.
-    pub fn init(&self, flash: &FLASH) -> super::FlashResult {
+    pub fn init(&self, flash: &FLASH) -> FlashResult {
         let flash = super::unlock(flash)?;
 
-        let current = self.find_current();
+        let active = self.find_active();
         for page in 0..self.page_count {
-            match current {
-                Some(p) if p == page => (), // Do not erase the current page
+            match active {
+                Some(p) if p == page => (), // Do not erase active page
                 _ => {
                     self.erase_page(&*flash, page)?;
                 }
             }
         }
 
-        match current {
-            Some(page) => {
-                self.rescue_if_full(&*flash, page)
-            },
-            None => {
-                // Current page not found, mark the first page as current
-                self.set_page_status(&*flash, 0, CURRENT_PAGE_MARKER)
-            }
+        if let None = active {
+            // Active page not found, mark the first page as active
+            return self.set_page_status(&*flash, 0, ACTIVE_PAGE_MARKER);
         }
+        Ok(())
     }
 
     /// Erase all values stored in EEPROM
-    pub fn erase(&self, flash: &FLASH) -> super::FlashResult {
+    pub fn erase(&self, flash: &FLASH) -> FlashResult {
         let flash = super::unlock(flash)?;
 
         for page in 0..self.page_count {
             self.erase_page(&*flash, page)?;
         }
 
-        // Mark the first page as the current
-        self.set_page_status(&*flash, 0, CURRENT_PAGE_MARKER)
+        // Mark the first page as the active
+        self.set_page_status(&*flash, 0, ACTIVE_PAGE_MARKER)
     }
 
-    fn rescue_if_full(&self, flash: &FLASH, src_page: usize) -> super::FlashResult {
+    /// Read value for a specified tag
+    ///
+    /// # Panics
+    /// * panics if active page cannot be found
+    pub fn read(&self, tag: HalfWord) -> Option<HalfWord> {
+        let page = self.find_active().expect("cannot find active page");
+        self.search(page, self.page_items, tag)
+    }
+
+    /// Write value for a specified tag.
+    ///
+    /// # Panics
+    /// * panics if active page cannot be found
+    /// * panics if page is full even after compacting it to the empty one
+    pub fn write(&self, flash: &FLASH, tag: HalfWord, data: HalfWord) -> FlashResult {
+        let page = self.find_active().expect("cannot find active page");
+
+        // rescue all the data to the free page first
+        let page = self.rescue_if_full(flash, page)?;
+
+        for item in 1..self.page_items {
+            if self.read_item(page, item) == ERASED_ITEM {
+                return self.program_item(flash, page, item, tag, data)
+            }
+        }
+        panic!("too many variables");
+    }
+
+    fn rescue_if_full(&self, flash: &FLASH, src_page: usize) -> Result<usize, super::FlashError> {
         // Check if last word of the page was written or not
         // Note that we check both data and the tag as in case of failure we might write
         // data, but not the tag.
         if self.read_item(src_page, self.page_items - 1) == ERASED_ITEM {
             // Page is not full yet -- last item is an erased value
-            return Ok(());
+            return Ok(src_page);
         }
 
         // Last word was not 0xffffffff, we need to rescue to the next page
@@ -144,22 +189,15 @@ impl EEPROM {
             }
 
             if let None = self.search(tgt_page, tgt_pos, tag) {
-                let item_addr = self.item_address(tgt_page, tgt_pos);
-
-                unsafe {
-                    // Not found -- write the value first, so if we fail for whatever reason,
-                    // we don't have 0xffff value for the tag
-                    super::program_half_word(flash, (item_addr + 2) as *mut HalfWord, data)?;
-                    super::program_half_word(flash, item_addr as *mut HalfWord, tag)?;
-                }
+                self.program_item(flash, tgt_page, tgt_pos, tag, data)?;
                 tgt_pos += 1;
             }
         }
 
-        self.set_page_status(flash, tgt_page, CURRENT_PAGE_MARKER)?; // Mark target page as current
+        self.set_page_status(flash, tgt_page, ACTIVE_PAGE_MARKER)?; // Mark target page as active
         self.erase_page(flash, src_page)?; // Erase the source page
 
-        Ok(())
+        Ok(tgt_page)
     }
 
     fn search(&self, page: usize, max_item: usize, tag: HalfWord) -> Option<HalfWord> {
@@ -172,9 +210,9 @@ impl EEPROM {
         None
     }
 
-    fn find_current(&self) -> Option<usize> {
+    fn find_active(&self) -> Option<usize> {
         for page in 0..self.page_count {
-            if self.page_status(page) == CURRENT_PAGE_MARKER {
+            if self.page_status(page) == ACTIVE_PAGE_MARKER {
                 return Some(page);
             }
         }
@@ -182,11 +220,10 @@ impl EEPROM {
     }
 
     fn page_status(&self, page: usize) -> HalfWord {
-        debug_assert!(page < self.page_count, "a page must be less than page count");
         unsafe { ptr::read(self.page_address(page) as *mut HalfWord) }
     }
 
-    fn set_page_status(&self, flash: &FLASH, page: usize, status: HalfWord) -> super::FlashResult {
+    fn set_page_status(&self, flash: &FLASH, page: usize, status: HalfWord) -> FlashResult {
         unsafe { super::program_half_word(flash, self.page_address(page) as *mut HalfWord, status) }
     }
 
@@ -209,22 +246,24 @@ impl EEPROM {
         ((item & 0xffff) as HalfWord, (item >> 16) as HalfWord)
     }
 
-    fn erase_page(&self, flash: &FLASH, page: usize) -> super::FlashResult {
+    fn erase_page(&self, flash: &FLASH, page: usize) -> FlashResult {
         if self.is_page_dirty(page) {
-            self.do_erase_page(flash, page)
+            let result = self.do_erase_page(flash, page);
+            debug_assert!(!self.is_page_dirty(page));
+            result
         } else {
             Ok(())
         }
     }
 
     #[cfg(not(test))]
-    fn do_erase_page(&self, flash: &FLASH, page: usize) -> super::FlashResult {
+    fn do_erase_page(&self, flash: &FLASH, page: usize) -> FlashResult {
         unsafe { super::erase_page(flash, self.page_address(page) as *mut HalfWord) }
     }
 
     // Fake variant used in tests -- simply writes 0xff in the whole page
     #[cfg(test)]
-    fn do_erase_page(&self, _flash: &FLASH, page: usize) -> super::FlashResult {
+    fn do_erase_page(&self, _flash: &FLASH, page: usize) -> FlashResult {
         for item in 0..self.page_items {
             unsafe { ptr::write(self.item_address(page, item) as *mut Word, 0xffff_ffffu32) }
         }
@@ -239,5 +278,15 @@ impl EEPROM {
             }
         }
         return false;
+    }
+
+    fn program_item(&self, flash: &FLASH, page: usize, pos: usize, tag: HalfWord, data: HalfWord) -> FlashResult {
+        let item_addr = self.item_address(page, pos);
+        unsafe {
+            // Not found -- write the value first, so if we fail for whatever reason,
+            // we don't have the default value of `0xffff` for the item with `tag`.
+            super::program_half_word(flash, (item_addr + 2) as *mut HalfWord, data)?;
+            super::program_half_word(flash, item_addr as *mut HalfWord, tag)
+        }
     }
 }

@@ -88,11 +88,10 @@ fn test_init_valid_simple() { test_init("dumps/valid-simple.txt", "dumps/valid-s
 
 // Note that order is reversed when rescued (since we scan from the end)
 #[test]
-fn test_init_rescue_full_simple() { test_init("dumps/full-simple.txt", "dumps/valid-simple.txt") }
+fn test_init_full_simple() { test_init("dumps/full-bogus.txt", "dumps/full-bogus.txt") }
 
-// Duplicates are ignored
 #[test]
-fn test_init_rescue_full_simple_duplicated() { test_init("dumps/full-simple-duplicated-data.txt", "dumps/valid-simple.txt") }
+fn test_init_rescue_full_simple_duplicated() { test_init("dumps/full-bogus-duplicated-data.txt", "dumps/full-bogus-duplicated-data.txt") }
 
 
 // erase() tests
@@ -107,4 +106,52 @@ fn test_erase_empty_page2() { test_erase("dumps/empty-page2.txt", "dumps/empty.t
 fn test_erase_simple() { test_erase("dumps/valid-simple.txt", "dumps/empty.txt") }
 
 #[test]
-fn test_erase_full_simple() { test_erase("dumps/full-simple.txt", "dumps/empty.txt") }
+fn test_erase_full_simple() { test_erase("dumps/full-bogus.txt", "dumps/empty.txt") }
+
+// find() tests
+#[test]
+fn test_read_full_simple() {
+    let mut mcu = FakeMCU::load("dumps/full-bogus.txt", 1024, 2);
+    let eeprom = mcu.eeprom();
+
+    assert_eq!(0xdead, eeprom.read(1).unwrap()); // last item on the page
+    assert_eq!(0xbeef, eeprom.read(2).unwrap());
+    assert_eq!(true, eeprom.read(3).is_none());
+
+    // should not read item on the page -- page status
+    assert_eq!(true, eeprom.read(0xabcd).is_none());
+}
+
+// read() tests
+#[test]
+fn test_read_full_simple_duplicated() {
+    let mut mcu = FakeMCU::load("dumps/full-bogus-duplicated-data.txt", 1024, 2);
+    let eeprom = mcu.eeprom();
+
+    assert_eq!(0xdead, eeprom.read(1).unwrap());
+    assert_eq!(0xbeef, eeprom.read(2).unwrap());
+    assert_eq!(true, eeprom.read(3).is_none());
+}
+
+// write() tests
+#[test]
+fn test_write_empty() {
+    test("dumps/empty.txt", "dumps/valid-simple.txt", |eeprom, flash| {
+        eeprom.write(flash, 1, 0xdead).unwrap();
+        eeprom.write(flash, 2, 0xbeef).unwrap();
+    });
+}
+
+#[test]
+fn test_write_rescue() {
+    test("dumps/full-bogus.txt", "dumps/valid-simple-third.txt", |eeprom, flash| {
+        eeprom.write(flash, 3, 0xacdb).unwrap();
+    });
+}
+
+#[test]
+fn test_write_rescue_duplicated() {
+    test("dumps/full-simple.txt", "dumps/valid-simple-third.txt", |eeprom, flash| {
+        eeprom.write(flash, 3, 0xacdb).unwrap();
+    });
+}
