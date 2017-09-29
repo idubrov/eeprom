@@ -11,6 +11,9 @@
 //! EEPROM controller does not check if all possible variables fit on a single Flash page. If
 //! different variables do not fit into single Flash page, the behavior is undefined.
 
+#[cfg(test)]
+mod tests;
+
 use stm32f103xx::FLASH;
 use core::option::Option;
 use core::ptr;
@@ -236,82 +239,5 @@ impl EEPROM {
             }
         }
         return false;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    extern crate std;
-
-    use super::super::eeprom;
-    use stm32f103xx::FLASH;
-    use self::std::mem::size_of;
-    use self::std::vec::Vec;
-
-    const REG_SIZE: usize = size_of::<FLASH>();
-    struct FakeMCU {
-        flash_mem: Vec<u16>,
-        flash_reg: [u8; REG_SIZE],
-        page_size: usize,
-        page_count: usize
-    }
-
-    impl FakeMCU {
-        // Create fake FLASH register
-        fn flash_reg(&self) -> &'static FLASH {
-            unsafe {
-                let ptr = &self.flash_reg[0] as *const u8;
-                &*(ptr as *mut FLASH)
-            }
-        }
-
-        fn new(page_size: usize, page_count: usize) -> FakeMCU {
-            let size = page_size * page_count / size_of::<u16>();
-            FakeMCU {
-                flash_mem: std::iter::repeat(0xffffu16).take(size).collect(),
-                flash_reg: [0; REG_SIZE],
-                page_size,
-                page_count
-            }
-        }
-
-        fn eeprom(&mut self) -> eeprom::EEPROM {
-            eeprom::new(self.flash_mem.as_mut_ptr() as usize, self.page_size, self.page_count)
-        }
-    }
-
-
-    #[test]
-    fn test_init() {
-        let mut mcu = FakeMCU::new(1024, 2);
-        let eeprom = mcu.eeprom();
-
-        for i in 0..1024 {
-            assert_eq!(0xffff, mcu.flash_mem[i]);
-        }
-
-        eeprom.init(mcu.flash_reg()).unwrap();
-
-        assert_eq!(0xabcd, mcu.flash_mem[0]);
-        for i in 1..1024 {
-            assert_eq!(0xffff, mcu.flash_mem[i]);
-        }
-    }
-
-    #[test]
-    fn test_init_zeroed_memory() {
-        let mut mcu = FakeMCU::new(1024, 2);
-        let eeprom = mcu.eeprom();
-
-        for i in 0..1024 {
-            mcu.flash_mem[i] = 0;
-        }
-
-        eeprom.init(mcu.flash_reg()).unwrap();
-
-        assert_eq!(0xabcd, mcu.flash_mem[0]);
-        for i in 1..1024 {
-            assert_eq!(0xffff, mcu.flash_mem[i]);
-        }
     }
 }

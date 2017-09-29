@@ -7,6 +7,14 @@
 
 pub mod eeprom;
 
+#[cfg(test)]
+#[macro_use]
+extern crate std;
+
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
+
 extern crate stm32f103xx;
 use core::ops::Deref;
 use core::result::Result;
