@@ -8,9 +8,9 @@ jobs:
     steps:
       - checkout
       - run: cargo build
-      - run: cargo test --no-default-features
+      - run: cargo test
       - run: cargo clippy
-      - run: cargo kcov --no-default-features
+      - run: cargo kcov
       - run:
           name: Uploading code coverage
           command: |
