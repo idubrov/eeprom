@@ -54,9 +54,12 @@ const ITEM_SIZE: usize = size_of::<Word>();
 // Default EEPROM (should be defined by the linker script, if feature is enabled)
 #[cfg(feature = "default-eeprom")]
 extern "C" {
-    static _eeprom_start: u32;
-    static _page_size: u32;
-    static _eeprom_pages: u32;
+    #[link_name = "_eeprom_start"]
+    static EEPROM_START: u32;
+    #[link_name = "_page_size"]
+    static PAGE_SIZE: u32;
+    #[link_name = "_eeprom_pages"]
+    static EEPROM_PAGES: u32;
 }
 
 /// EEPROM controller. Uses Flash for implementing key-value storage for 16-bit data values.
@@ -73,9 +76,9 @@ pub struct EEPROM {
 ///  * `_eeprom_pages` should be the amount of FLASH pages to be used for EEPROM (2 is the minimum)
 #[cfg(feature = "default-eeprom")]
 pub fn default() -> EEPROM {
-    let first_page_address = unsafe { &_eeprom_start } as *const u32 as usize;
-    let page_size = unsafe { &_page_size } as *const u32 as usize;
-    let page_count = unsafe { &_eeprom_pages } as *const u32 as usize;
+    let first_page_address = unsafe { &EEPROM_START } as *const u32 as usize;
+    let page_size = unsafe { &PAGE_SIZE } as *const u32 as usize;
+    let page_count = unsafe { &EEPROM_PAGES } as *const u32 as usize;
     EEPROM {
         first_page_address,
         page_items: page_size / ITEM_SIZE,

@@ -14,7 +14,7 @@ pre-release-hook = "./update-readme.sh"
 [dependencies.stm32f103xx]
 version = "0.7.5"
 
-[dependencies.pretty_assertions]
+[dev-dependencies.pretty_assertions]
 version = "0.3.4"
 
 [features]
