@@ -27,6 +27,7 @@
 //!
 //! # Panics
 //! EEPROM controller will panic in the following cases:
+//!
 //! * No free space on the page even after compaction
 //! * active page cannot be found during `read`/`write` operation (`init` makes sure that there
 //!   is exactly one active page.
@@ -86,16 +87,18 @@ extern "C" {
 /// EEPROM-capable peripheral.
 pub trait EEPROM<'a> where Self: Flash, Self: Sized {
     /// Create default EEPROM controller. Uses variables defined by linker script to determine EEPROM location:
-    ///  * `_eeprom_start` should be an address of the first page
-    ///  * `_page_size` should be the FLASH page size (in bytes)
-    ///  * `_eeprom_pages` should be the amount of FLASH pages to be used for EEPROM (2 is the minimum)
+    ///
+    /// * `_eeprom_start` should be an address of the first page
+    /// * `_page_size` should be the FLASH page size (in bytes)
+    /// * `_eeprom_pages` should be the amount of FLASH pages to be used for EEPROM (2 is the minimum)
     #[cfg(feature = "default-eeprom")]
     fn eeprom(&'a self) -> EEPROMController<'a, Self>;
 
     /// Create EEPROM controller with given parameters:
-    ///  * `first_page` should be an address of the first page to use for EEPROM
-    ///  * `page_size` should be the page size (in bytes)
-    ///  * `page_count` should be the amount of FLASH pages to be used for EEPROM (2 is the minimum)
+    ///
+    /// * `first_page` should be an address of the first page to use for EEPROM
+    /// * `page_size` should be the page size (in bytes)
+    /// * `page_count` should be the amount of FLASH pages to be used for EEPROM (2 is the minimum)
     fn eeprom_params(&'a self, first_page_address: usize, page_size: usize, page_count: usize) -> EEPROMController<'a, Self>;
 }
 
@@ -125,7 +128,7 @@ pub struct EEPROMController<'a, FlashT> where FlashT: 'a, FlashT: Flash {
 }
 
 impl <'a, FlashT> EEPROMController<'a, FlashT> where FlashT: 'a, FlashT: Flash {
-    /// Create a new EEPROMController to work with EEPROM memory.
+    /// Create a new EEPROM controller to work with Flash memory abstracted by `FlashT` type.
     pub fn new(first_page_address: usize, page_size: usize, page_count: usize, flash: &'a FlashT) -> EEPROMController<'a, FlashT> {
         debug_assert!(page_count >= 2,
                       "EEPROM page count must be greater or equal to 2! Check your linker script for `_eeprom_pages`");
