@@ -1,7 +1,8 @@
-use super::super::eeprom;
-use stm32f103xx::FLASH;
+use super::{EEPROM, EEPROMController};
+use stm32_hal::flash::{Flash, FlashResult};
 use std::mem::size_of;
 use std::vec::Vec;
+use std::cell::RefCell;
 
 mod memdump;
 
@@ -17,65 +18,91 @@ pub fn used() {
     assert_eq!(0, EEPROM_PAGES);
 }
 
-const REG_SIZE: usize = size_of::<FLASH>();
-
-struct FakeMCU {
-    flash_mem: Vec<u16>,
-    flash_reg: [u8; REG_SIZE],
+struct MockFlash {
+    flash_mem: RefCell<Vec<u16>>,
     page_size: usize,
     page_count: usize
 }
 
 // Emulate MCU flash memory & FLASH control registers
-impl FakeMCU {
-    fn load(filename: &str, page_size: usize, page_count: usize) -> FakeMCU {
+impl MockFlash {
+    fn load(filename: &str, page_size: usize, page_count: usize) -> MockFlash {
         let size = page_size * page_count / size_of::<u16>();
         let flash_mem = memdump::read_dump(filename);
 
         assert_eq!(size, flash_mem.len());
-        FakeMCU {
-            flash_mem,
-            flash_reg: [0; REG_SIZE],
+        MockFlash {
+            flash_mem: RefCell::new(flash_mem),
             page_size,
             page_count
         }
     }
+}
 
-    // Fake FLASH register
-    fn flash_reg(&self) -> &'static FLASH {
-        unsafe {
-            let ptr = &self.flash_reg[0] as *const u8;
-            &*(ptr as *mut FLASH)
+impl Flash for MockFlash {
+    fn is_locked(&self) -> bool { false }
+
+    fn status(&self) -> FlashResult { Ok(()) }
+
+    unsafe fn erase_page(&self, address: usize) -> FlashResult {
+        let mut vec = self.flash_mem.borrow_mut();
+
+        let offset = address - (vec.as_ptr() as usize);
+        assert_eq!(offset % self.page_size, 0);
+        for i in 0..(self.page_size / 2) {
+            vec[(offset / 2) + i] = 0xffff;
         }
+        Ok(())
     }
 
-    // Create an instance of the eeprom controller
-    fn eeprom(&mut self) -> eeprom::EEPROM {
-        eeprom::new(self.flash_mem.as_mut_ptr() as usize, self.page_size, self.page_count)
+    unsafe fn program_half_word(&self, address: usize, data: u16) -> FlashResult {
+        let mut vec = self.flash_mem.borrow_mut();
+
+        let offset = address - (vec.as_ptr() as usize);
+        vec[offset / 2] = data;
+        Ok(())
+    }
+
+    unsafe fn erase_all_pages(&self) -> FlashResult {
+        unimplemented!()
+    }
+
+    unsafe fn lock(&self) { }
+
+    unsafe fn unlock(&self) { }
+}
+
+impl <'a> EEPROM<'a> for MockFlash where MockFlash: 'a {
+    fn eeprom(&'a self) -> EEPROMController<'a, Self> {
+        EEPROMController::new(self.flash_mem.borrow().as_ptr() as usize, self.page_size, self.page_count, &self)
+    }
+
+    fn eeprom_params(&'a self, _first_page_address: usize, _page_size: usize, _page_count: usize) -> EEPROMController<'a, Self> {
+        unimplemented!()
     }
 }
 
-fn test(initial: &str, expected: &str, cb: fn (&eeprom::EEPROM, &FLASH)) {
-    let mut mcu = FakeMCU::load(initial, 1024, 2);
+fn test(initial: &str, expected: &str, cb: fn (&EEPROMController<MockFlash>)) {
+    let mcu = MockFlash::load(initial, 1024, 2);
     let eeprom = mcu.eeprom();
 
-    cb(&eeprom, mcu.flash_reg());
+    cb(&eeprom);
 
     let expected_file = memdump::read_file(expected);
     let expected: Vec<&str> = expected_file.lines().collect();
-    let actual_dump = memdump::dump(&mcu.flash_mem, mcu.page_size);
+    let actual_dump = memdump::dump(&mcu.flash_mem.borrow(), mcu.page_size);
     let actual_lines: Vec<&str> = actual_dump.lines().collect();
     assert_eq!(expected, actual_lines);
 }
 
 fn test_init(initial: &str, expected: &str) {
-    test(initial, expected, |eeprom, flash|
-        eeprom.init(flash).unwrap())
+    test(initial, expected, |eeprom|
+        eeprom.init().unwrap())
 }
 
 fn test_erase(initial: &str, expected: &str) {
-    test(initial, expected, |eeprom, flash|
-        eeprom.erase(flash).unwrap())
+    test(initial, expected, |eeprom|
+        eeprom.erase().unwrap())
 }
 
 // init() tests
@@ -123,7 +150,7 @@ fn test_erase_full_simple() { test_erase("dumps/full-bogus.txt", "dumps/empty.tx
 // find() tests
 #[test]
 fn test_read_full_simple() {
-    let mut mcu = FakeMCU::load("dumps/full-bogus.txt", 1024, 2);
+    let mcu = MockFlash::load("dumps/full-bogus.txt", 1024, 2);
     let eeprom = mcu.eeprom();
 
     assert_eq!(0xdead, eeprom.read(1).unwrap()); // last item on the page
@@ -134,7 +161,7 @@ fn test_read_full_simple() {
 // read() tests
 #[test]
 fn test_read_full_simple_duplicated() {
-    let mut mcu = FakeMCU::load("dumps/full-bogus-duplicated-data.txt", 1024, 2);
+    let mcu = MockFlash::load("dumps/full-bogus-duplicated-data.txt", 1024, 2);
     let eeprom = mcu.eeprom();
 
     assert_eq!(0xdead, eeprom.read(1).unwrap());
@@ -145,22 +172,22 @@ fn test_read_full_simple_duplicated() {
 // write() tests
 #[test]
 fn test_write_empty() {
-    test("dumps/empty.txt", "dumps/valid-simple.txt", |eeprom, flash| {
-        eeprom.write(flash, 1, 0xdead).unwrap();
-        eeprom.write(flash, 2, 0xbeef).unwrap();
+    test("dumps/empty.txt", "dumps/valid-simple.txt", |eeprom| {
+        eeprom.write(1, 0xdead).unwrap();
+        eeprom.write(2, 0xbeef).unwrap();
     });
 }
 
 #[test]
 fn test_write_rescue() {
-    test("dumps/full-bogus.txt", "dumps/valid-simple-third.txt", |eeprom, flash| {
-        eeprom.write(flash, 3, 0xacdb).unwrap();
+    test("dumps/full-bogus.txt", "dumps/valid-simple-third.txt", |eeprom| {
+        eeprom.write(3, 0xacdb).unwrap();
     });
 }
 
 #[test]
 fn test_write_rescue_duplicated() {
-    test("dumps/full-simple.txt", "dumps/valid-simple-third.txt", |eeprom, flash| {
-        eeprom.write(flash, 3, 0xacdb).unwrap();
+    test("dumps/full-simple.txt", "dumps/valid-simple-third.txt", |eeprom| {
+        eeprom.write(3, 0xacdb).unwrap();
     });
 }

@@ -1,11 +1,13 @@
-[![crates.io](https://img.shields.io/crates/v/stm32-flash.svg)](https://crates.io/crates/stm32-flash)
-[![crates.io](https://img.shields.io/crates/d/stm32-flash.svg)](https://crates.io/crates/stm32-flash)
-[![CircleCI](https://img.shields.io/circleci/project/github/idubrov/stm32-flash.svg)](https://circleci.com/gh/idubrov/stm32-flash)
-[![Codecov](https://img.shields.io/codecov/c/github/idubrov/stm32-flash.svg)](https://codecov.io/gh/idubrov/stm32-flash)
+[![crates.io](https://img.shields.io/crates/v/eeprom.svg)](https://crates.io/crates/eeprom)
+[![crates.io](https://img.shields.io/crates/d/eeprom.svg)](https://crates.io/crates/eeprom)
+[![CircleCI](https://img.shields.io/circleci/project/github/idubrov/eeprom.svg)](https://circleci.com/gh/idubrov/eeprom)
+[![Codecov](https://img.shields.io/codecov/c/github/idubrov/eeprom.svg)](https://codecov.io/gh/idubrov/eeprom)
 
 # {{crate}}
 
 {{readme}}
+
+[Full Documentation](https://docs.rs/eeprom)
 
 ## License
 

@@ -2,8 +2,8 @@
 authors = ["Ivan Dubrov <dubrov.ivan@gmail.com>"]
 categories = ["embedded", "no-std"]
 description = "EEPROM emulation on top of FLASH for STM32"
-repository = "https://github.com/idubrov/stm32-flash"
-name = "stm32-flash"
+repository = "https://github.com/idubrov/eeprom"
+name = "eeprom"
 version = "0.1.0"
 license = "MIT/Apache-2.0"
 readme = "README.md"
@@ -11,12 +11,17 @@ readme = "README.md"
 [package.metadata.release]
 pre-release-hook = "./update-readme.sh"
 
-[dependencies.stm32f103xx]
-version = "0.7.5"
+[dependencies.stm32-hal]
+version = "0.2.0"
 
 [dev-dependencies.pretty_assertions]
 version = "0.3.4"
 
+[dependencies.stm32f103xx]
+optional = true
+version = "0.7.5"
+
 [features]
 default = ["default-eeprom"]
 default-eeprom = []
+use-stm32f103xx = ["stm32-hal/use-stm32f103xx", "stm32f103xx"]
