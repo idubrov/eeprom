@@ -2,6 +2,7 @@
 authors = ["Ivan Dubrov <dubrov.ivan@gmail.com>"]
 categories = ["embedded", "no-std"]
 description = "EEPROM emulation on top of FLASH for STM32"
+documentation = "https://docs.rs/eeprom"
 repository = "https://github.com/idubrov/eeprom"
 name = "eeprom"
 version = "0.1.1-alpha.0"
