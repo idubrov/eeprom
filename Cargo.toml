@@ -5,24 +5,19 @@ description = "EEPROM emulation on top of FLASH for STM32"
 documentation = "https://docs.rs/eeprom"
 repository = "https://github.com/idubrov/eeprom"
 name = "eeprom"
-version = "0.1.1-alpha.0"
+version = "0.2.0-alpha.0"
+edition = "2021"
 license = "MIT/Apache-2.0"
 readme = "README.md"
 
 [package.metadata.release]
 pre-release-hook = "./update-readme.sh"
 
-[dependencies.stm32-hal]
-version = "0.2.0"
+[dependencies]
+stm32f1xx-hal = {version = "0.8.0", features = [ "stm32f103" ], optional = true }
 
-[dev-dependencies.pretty_assertions]
-version = "0.3.4"
-
-[dependencies.stm32f103xx]
-optional = true
-version = "0.7.5"
+[dev-dependencies]
+pretty_assertions = "1.0.0"
 
 [features]
-default = ["default-eeprom"]
-default-eeprom = []
-use-stm32f103xx = ["stm32-hal/use-stm32f103xx", "stm32f103xx"]
+stm32f103 = ["stm32f1xx-hal", "stm32f1xx-hal/stm32f103"]

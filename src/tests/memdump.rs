@@ -1,13 +1,16 @@
 use std::fmt::Write;
-use std::string::String;
-use std::vec::Vec;
-use std::mem::size_of;
 use std::fs::File;
 use std::io::Read;
+use std::mem::size_of;
+use std::string::String;
+use std::vec::Vec;
 
-pub fn dump(vec: &Vec<u16>, page_size: usize) -> String {
+pub fn dump(vec: &Vec<u16>, page_size: u32) -> String {
     let mut buf: String = String::new();
-    for (page, p) in vec.chunks(page_size / size_of::<u16>()).enumerate() {
+    for (page, p) in vec
+        .chunks((page_size as usize) / size_of::<u16>())
+        .enumerate()
+    {
         if page != 0 {
             writeln!(buf).unwrap();
         }
@@ -18,10 +21,13 @@ pub fn dump(vec: &Vec<u16>, page_size: usize) -> String {
                 if i != 0 {
                     write!(buf, " ").unwrap();
                 }
-                write!(buf, "{:0>4x}:{:0>4x}",
-                       item.get(0).unwrap(),
-                       item.get(1).unwrap()).unwrap();
-
+                write!(
+                    buf,
+                    "{:0>4x}:{:0>4x}",
+                    item.get(0).unwrap(),
+                    item.get(1).unwrap()
+                )
+                .unwrap();
             }
             writeln!(buf).unwrap();
         }
@@ -49,7 +55,8 @@ pub fn read(buf: &str) -> Vec<u16> {
 pub fn read_file(filename: &str) -> String {
     let mut f = File::open(filename).expect("file not found");
     let mut contents = String::new();
-    f.read_to_string(&mut contents).expect("failed to read mem file");
+    f.read_to_string(&mut contents)
+        .expect("failed to read mem file");
     contents
 }
 
