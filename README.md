@@ -10,13 +10,11 @@ Uses 2 or more Flash pages for storing 16-bit data.
 
 ## Examples
 ```rust
-extern crate stm32f103xx;
-extern crate eeprom;
-use stm32f103xx::FLASH;
 use eeprom::EEPROM;
-// Get flash somehow...
-// let flash = FLASH.borrow(cs);
-let eeprom = flash.eeprom();
+struct MockFlash;
+// let param = Params { .. };
+// let mut flash: stm32f1::stm32f103::FLASH = /* get flash somehow */;
+let mut eeprom = flash.eeprom(params);
 eeprom.init().expect("failed to init EEPROM");
 eeprom.write(1, 0xdead).expect("failed to write data to EEPROM");
 eeprom.write(2, 0xbeef).expect("failed to write data to EEPROM");
@@ -27,6 +25,7 @@ assert_eq!(true, eeprom.read(3).is_none());
 
 ## Panics
 EEPROM controller will panic in the following cases:
+
 * No free space on the page even after compaction
 * active page cannot be found during `read`/`write` operation (`init` makes sure that there
   is exactly one active page.
