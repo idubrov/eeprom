@@ -282,12 +282,7 @@ where
     }
 
     fn find_active(&mut self) -> Option<u32> {
-        for page in 0..self.params.page_count {
-            if self.page_status(page) == ACTIVE_PAGE_MARKER {
-                return Some(page);
-            }
-        }
-        None
+        (0..self.params.page_count).find(|&page| self.page_status(page) == ACTIVE_PAGE_MARKER)
     }
 
     fn page_status(&mut self, page: u32) -> HalfWord {
