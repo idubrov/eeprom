@@ -14,7 +14,7 @@ readme = "README.md"
 pre-release-hook = "./update-readme.sh"
 
 [dependencies]
-stm32f1xx-hal = {version = "0.8.0", features = [ "stm32f103" ], optional = true }
+stm32f1xx-hal = {version = "0.9.0", features = [ "stm32f103" ], optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1.0.0"
